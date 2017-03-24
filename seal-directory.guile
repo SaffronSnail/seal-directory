@@ -1,0 +1,24 @@
+#! /run/current-system/sw/bin/guile
+!#
+
+(use-modules (ice-9 getopt-long)
+             (ice-9 format)
+)
+
+(define options-spec '((help    (single-char #\h) (value #f))
+                            (version (single-char #\v)   (value #f))
+                            (source  (single-char #\s)   (value #t))
+                            (dest    (single-char #\d)   (value #t))
+                            (recipient (single-char #\r) (value #t))
+                           )
+)
+
+(define options (getopt-long (command-line) options-spec))
+(define source (option-ref options 'source #f))
+
+(unless source (error "source (--source, -s) is required!"))
+
+(define destination (string-append (option-ref options 'dest source) ".tar.gz.gpg"))
+
+(system (string-append "tar cz " source " | gpg --output " destination " --encrypt -"))
+
