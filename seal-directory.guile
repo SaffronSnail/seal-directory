@@ -5,20 +5,85 @@
              (ice-9 format)
 )
 
-(define options-spec '((help    (single-char #\h) (value #f))
-                            (version (single-char #\v)   (value #f))
-                            (source  (single-char #\s)   (value #t))
-                            (dest    (single-char #\d)   (value #t))
-                            (recipient (single-char #\r) (value #t))
-                           )
+(define options-spec '((help      (single-char #\h) (value #f))
+                       (version   (single-char #\v) (value #f))
+                       (source    (single-char #\s) (value #t))
+                       (dest      (single-char #\d) (value #t))
+                       (recipient (single-char #\r) (value #t))
+                      )
 )
 
 (define options (getopt-long (command-line) options-spec))
-(define source (option-ref options 'source #f))
 
-(unless source (error "source (--source, -s) is required!"))
+(define* (seal-directory #:key  compressor encrypter
+                                source destination recipient
+         )
+  (let ((command
+          (string-append (compressor 'command) " "
+                           (compressor 'source) " "
+                           source " | "
+                         (encrypter 'command) " "
+                           (encrypter 'destination) " "
+                           destination
+                           (if recipient
+                             (string-append " " (encrypter 'recipient) " " recipient)
+                             ""
+                           )
+          )
+       ))
+    (display "running: ") (display command) (newline)
+    (system command)
+  )
+)
 
-(define destination (string-append (option-ref options 'dest source) ".tar.gz.gpg"))
+(define (tar cmd)
+  (case cmd
+    ('command "tar cz")
+    ('source "")
+    (else (error (string-append "tar does not understand the message "
+                                (symbol->string command)
+                 )
+          )
+    )
+  )
+)
 
-(system (string-append "tar cz " source " | gpg --output " destination " --encrypt -"))
+(define (gpg cmd)
+  (case cmd
+    ('command "gpg --encrypt")
+    ('destination "--output")
+    ('recipient "--recipient")
+  )
+)
+
+(cond
+  ((option-ref options 'help #f)
+    (display (string-append "USAGE: seal-directory -s SOURCE -d"
+                            "DESTINATION -r RECIPIENT |\nseal-directory"
+                            " -v |\nseal-directory -h"
+             )
+    )
+    (newline)
+  )
+  ((option-ref options 'version #f)
+   (display (string-append "seal-directory version 0.2"))
+   (newline)
+  )
+  (else
+    (let ((source (option-ref options 'source #f)))
+      (unless source
+        (error "You must specify a source! This can be done with --source or -s")
+      )
+      (seal-directory #:compressor  tar
+                      #:encrypter   gpg
+                      #:recipient   (option-ref options 'recipient #f)
+                      #:source      source
+                      #:destination (string-append
+                                      (option-ref options 'dest source)
+                                      ".tar.gz.gpg"
+                                    )
+      )
+    )
+  )
+)
 
